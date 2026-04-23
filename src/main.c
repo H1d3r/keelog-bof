@@ -46,6 +46,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam) {
     DWORD dwPid = 0;
     USER32$GetWindowThreadProcessId(hWnd, &dwPid);
     if (dwPid == param->dwPid) {
+        // The "Open database" window is the first window with a title for the KeePass process
         char title[256] = { 0 };
         USER32$GetWindowTextA(hWnd, title, sizeof(title));
         if (USER32$IsWindowVisible(hWnd) && title[0] != '\0') {
@@ -61,9 +62,6 @@ BOOL contains(char* str, char* str2) {
     return (MSVCRT$strstr(str, str2) != NULL);
 }
 
-// Returns TRUE only when the "Open Database" dialog is actively visible.
-// The old IsUnlocked returned FALSE for "no window", which was misread as
-// "locked" and caused the outer loop to exit during KeePass startup.
 BOOL IsLocked(DWORD dwPid) {
     ENUM_PARAM param = { .dwPid = dwPid, .hWnd = NULL };
     USER32$EnumWindows(EnumWindowsProc, (LPARAM)(&param));
@@ -182,7 +180,7 @@ _MONITOR:
 
     // Wait until a locked KeePass instance is found
     while (!ProcessExists(szKeePass, &dwPid) || !IsLocked(dwPid)) {
-        DWORD wait = KERNEL32$WaitForSingleObjectEx(hStop, 500, FALSE);
+        DWORD wait = KERNEL32$WaitForSingleObjectEx(hStop, 500, FALSE);     // 500ms delay for process detection
         if (wait == WAIT_OBJECT_0 || wait != WAIT_TIMEOUT)
             goto _CLEANUP;
     }
@@ -208,7 +206,7 @@ _MONITOR:
             USER32$DispatchMessageA(&msg);
 
         DWORD now = KERNEL32$GetTickCount();
-        if (now - lastCheck >= 200) {
+        if (now - lastCheck >= 200) {                                       // 200ms delay for unlock detection
             lastCheck = now;
             if (!ProcessExists(szKeePass, &dwPid) || !IsLocked(dwPid))
                 break;
