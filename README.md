@@ -3,7 +3,7 @@
 Async BOF that captures the KeePass master password by monitoring for the unlock prompt window. When a locked KeePass database is detected, a low-level keyboard hook is installed and keystrokes are captured until the prompt window disappears by being submitted, cancelled or closeed. The captured buffer is then returned to the operator and automatically reconstructed into the master password.
 
 >[!Important]
-> This BOF requires asynchronous object file loading capabilitie to work without blocking the agent. Such functionality is provided by the [Conquest](https://github.com/jakobfriedl/conquest/) framework.
+> This BOF requires asynchronous object file loading capabilities to work without blocking the agent. Such functionality is provided by the [Conquest](https://github.com/jakobfriedl/conquest/) framework.
 
 ## How it works 
 
